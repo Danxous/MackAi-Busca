@@ -1,0 +1,25 @@
+# Ambiente local só da Busca: PostgreSQL com pgvector + este serviço (porta 8002, como no compose do grupo).
+# Antes: python scripts/preparar_conhecimento.py
+# Sem GEMINI_API_KEY no .env, o serviço usa TF-IDF e não toca no banco.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: mackai
+      POSTGRES_PASSWORD: mackai
+      POSTGRES_DB: busca_db
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mackai -d busca_db"]
+      interval: 2s
+      retries: 15
+
+  busca:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://mackai:mackai@postgres:5432/busca_db
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports: ["8002:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy

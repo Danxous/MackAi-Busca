@@ -1,0 +1,577 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "mackai-busca",
+    "description": "\nBusca semântica do MackAI (Módulo 7): transforma o código e os documentos do projeto em trechos e devolve,\npara cada pergunta, os trechos mais parecidos em significado. Serviço **interno**: só o `mackai-orquestrador`\nchama estas rotas.\n\n**Estratégia:** com `GEMINI_API_KEY`, embeddings do Gemini guardados no PostgreSQL com pgvector\n(`strategy: \"embedding\"`). Sem a chave, TF-IDF em memória (`strategy: \"tfidf\"`), com o mesmo contrato.\n\n**Projetos:** `project_id` (UUID do Módulo 1) restringe a busca aos documentos daquele projeto. Se o projeto\nainda não tiver documentos indexados, a busca usa a base comum do Módulo 7 e responde `scope: \"global\"`.\n\n**Erros:** `{\"detail\": \"mensagem legível\", \"code\": \"CODIGO\"}`. Validação continua no 422 padrão do FastAPI.\n\n**Rastreamento:** o `X-Request-ID` recebido volta na resposta e aparece nos logs.\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "saúde"
+        ],
+        "summary": "Sonda de vida e prontidão do Container Apps",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search": {
+      "post": {
+        "tags": [
+          "busca"
+        ],
+        "summary": "Trechos mais parecidos com a pergunta, acima do limiar",
+        "operationId": "buscar_v1_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoBusca"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaBusca"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "busca_db (INDICE_INDISPONIVEL) ou embeddings (EMBEDDINGS_INDISPONIVEIS) fora do ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "tags": [
+          "índice"
+        ],
+        "summary": "Tamanho do índice e horário da última indexação",
+        "operationId": "estatisticas_v1_stats_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sem projeto = índice inteiro.",
+              "title": "Project Id"
+            },
+            "description": "Sem projeto = índice inteiro."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estatisticas"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "busca_db (INDICE_INDISPONIVEL) ou embeddings (EMBEDDINGS_INDISPONIVEIS) fora do ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents": {
+      "post": {
+        "tags": [
+          "índice"
+        ],
+        "summary": "Indexa ou atualiza um documento avulso",
+        "operationId": "documento_v1_documents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoDocumento"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaDocumento"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validação ou ARQUIVO_NAO_PERMITIDO (segredo, .env, extensão)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "busca_db (INDICE_INDISPONIVEL) ou embeddings (EMBEDDINGS_INDISPONIVEIS) fora do ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reindex": {
+      "post": {
+        "tags": [
+          "índice"
+        ],
+        "summary": "Reindexa todas as fontes de fontes.json (só os arquivos alterados geram embeddings)",
+        "operationId": "reindexar_v1_reindex_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaReindex"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "busca_db (INDICE_INDISPONIVEL) ou embeddings (EMBEDDINGS_INDISPONIVEIS) fora do ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Erro": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "Erro"
+      },
+      "Estatisticas": {
+        "properties": {
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "embedding",
+              "tfidf"
+            ],
+            "title": "Strategy"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "chunks": {
+            "type": "integer",
+            "title": "Chunks"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "indexing": {
+            "type": "boolean",
+            "title": "Indexing",
+            "description": "`true` enquanto uma reindexação está rodando."
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy",
+          "documents",
+          "chunks",
+          "sources",
+          "indexed_at",
+          "indexing"
+        ],
+        "title": "Estatisticas"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PedidoBusca": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Query",
+            "description": "Pergunta (ou pergunta anterior + atual). De 1 a 4.000 caracteres."
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 3
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id",
+            "description": "Projeto do Módulo 1. Se o projeto tiver documentos indexados, a busca fica restrita a eles; senão, usa a base comum do Módulo 7."
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "PedidoBusca",
+        "examples": [
+          {
+            "query": "Como esconder segredos da aplicação?",
+            "top_k": 3
+          },
+          {
+            "project_id": "7a1d0f4e-2b6c-4c1e-9f3a-5d8e7c6b4a01",
+            "query": "Quais serviços dependem do banco de pedidos?",
+            "top_k": 3
+          }
+        ]
+      },
+      "PedidoDocumento": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "title": "Source"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 204800,
+            "minLength": 1,
+            "title": "Content"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id",
+            "description": "Projeto do Módulo 1 dono do documento. Nulo = base comum."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "path",
+          "content"
+        ],
+        "title": "PedidoDocumento",
+        "examples": [
+          {
+            "content": "texto do documento",
+            "path": "docs/novo.md",
+            "source": "modulo-7"
+          }
+        ]
+      },
+      "RespostaBusca": {
+        "properties": {
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "embedding",
+              "tfidf"
+            ],
+            "title": "Strategy"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project",
+              "global"
+            ],
+            "title": "Scope",
+            "description": "`project` quando a busca ficou restrita ao `project_id`; `global` na base comum."
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/Trecho"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Só os trechos acima do limiar, do mais parecido para o menos. Vazio não é erro."
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy",
+          "scope",
+          "results"
+        ],
+        "title": "RespostaBusca"
+      },
+      "RespostaDocumento": {
+        "properties": {
+          "chunks": {
+            "type": "integer",
+            "title": "Chunks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunks"
+        ],
+        "title": "RespostaDocumento"
+      },
+      "RespostaReindex": {
+        "properties": {
+          "documents": {
+            "type": "integer",
+            "title": "Documents",
+            "description": "Documentos encontrados nas fontes depois do filtro."
+          },
+          "embedded_chunks": {
+            "type": "integer",
+            "title": "Embedded Chunks",
+            "description": "Trechos que geraram embeddings nesta rodada (0 no TF-IDF)."
+          },
+          "skipped_documents": {
+            "type": "integer",
+            "title": "Skipped Documents",
+            "description": "Documentos com o mesmo hash, pulados."
+          },
+          "removed_documents": {
+            "type": "integer",
+            "title": "Removed Documents",
+            "description": "Documentos que saíram das fontes e foram apagados do índice."
+          },
+          "failed_documents": {
+            "type": "integer",
+            "title": "Failed Documents",
+            "description": "Documentos que falharam nos embeddings; entram na próxima rodada.",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents",
+          "embedded_chunks",
+          "skipped_documents",
+          "removed_documents"
+        ],
+        "title": "RespostaReindex"
+      },
+      "Trecho": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Fonte do trecho, por exemplo `modulo-7`."
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Caminho relativo à raiz da fonte."
+          },
+          "start_line": {
+            "type": "integer",
+            "title": "Start Line"
+          },
+          "end_line": {
+            "type": "integer",
+            "title": "End Line"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity",
+            "description": "Similaridade de cosseno, de 0 a 1."
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Trecho completo. Quem corta o pedaço exibido é o Orquestrador."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "path",
+          "start_line",
+          "end_line",
+          "similarity",
+          "text"
+        ],
+        "title": "Trecho"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
