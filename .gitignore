@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Base de conhecimento: montada por scripts/preparar_conhecimento.py (CI) antes do docker build
+conhecimento/*
+!conhecimento/.gitkeep
+
+# Segredos
+.env

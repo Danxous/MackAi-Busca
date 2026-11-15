@@ -1,0 +1,14 @@
+[
+  {
+    "source": "modulo-7",
+    "path": "conhecimento/modulo-7",
+    "repos": [
+      { "dir": "mackai-busca", "local": true,
+        "include": ["busca_semantica", "tests", "scripts", "contracts", "docs", ".github", "README.md",
+                    "fontes.json", "Dockerfile", "docker-compose.yml", "requirements.txt", ".env.example"] },
+      { "dir": "mackai-conversas", "url": "https://github.com/gabrielmarinhorosa/MackAi-Conversa", "branch": "main" },
+      { "dir": "mvp", "url": "https://github.com/gabrielmarinhorosa/MVP-Modulo-7", "branch": "main",
+        "include": ["docs/microsservicos"] }
+    ]
+  }
+]
