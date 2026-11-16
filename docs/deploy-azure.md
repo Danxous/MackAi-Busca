@@ -45,7 +45,9 @@ A cadeia nunca vai para o repositório nem para grupo aberto. Se a senha tiver `
 ## 5. Imagem, recursos, variáveis e porta
 
 1. **Aplicativo → Contêineres → Editar e implantar**, selecione o contêiner e clique em **Editar**.
-2. Imagem: **Docker Hub ou outros registros**, **Público**, servidor `ghcr.io`, imagem `danxous/mackai-busca:latest`.
+2. Imagem: **Docker Hub ou outros registros**, **Público** e, em **Imagem e marca**, o nome completo
+   `ghcr.io/danxous/mackai-busca:latest`. Com imagem pública, o portal não mostra o campo do servidor de
+   registro: o `ghcr.io` vai no próprio nome da imagem.
 3. Recursos: CPU **0,25**, memória **0,5 Gi**.
 4. Variáveis de ambiente:
 
